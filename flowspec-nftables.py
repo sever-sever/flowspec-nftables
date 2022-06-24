@@ -205,7 +205,9 @@ if data.get('neighbor').get('message').get('update'):
             if route.get('port'):
                 port = route['port']
                 flow_route['port'] = port
-                nft_cmd += f' port {port[0]}'
+                # Port means src or destination port
+                # Maybe it is impossible with one nft rule
+                #nft_cmd += f' port {port[0]}'
 
             if route.get('destination-port'):
                 destination_port = route.get('destination-port')

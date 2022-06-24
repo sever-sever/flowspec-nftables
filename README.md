@@ -5,6 +5,7 @@ Generate rules:
 * destination address
 * destination port
 * source port
+* proto
 
 TODO parse other options
 
@@ -24,5 +25,5 @@ Flow-route dict:
  'port': ['=80'],
  'proto': ['=tcp'],
  'source_port': ['=8888']}
-DEBUG: sudo nft add rule ip flowspec drop_flow_routes  ip daddr 192.0.2.5/32 port 80 tcp dport 3128 tcp sport 8888 drop
+DEBUG: sudo nft add rule ip flowspec drop_flow_routes  ip daddr 192.0.2.5/32 tcp dport 3128 tcp sport 8888 drop
 ```
