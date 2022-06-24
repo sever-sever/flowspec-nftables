@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
-
 import json
 import re
+import subprocess
 
 from pprint import pprint
 
 # Example announce dict
-update = {
+announce = {
    "exabgp":"4.0.1",
    "time":1655825609.2727358,
    "host":"8e9e652ed857",
@@ -122,10 +122,57 @@ withdraw = {
    }
 }
 
-data = update
+data = announce
 #data = withdraw
 
+table = 'flowspec'
+chain = 'drop_flow_routes'
+
+def run_rc(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE):
+    """
+    Run command, get return code
+    On success:
+        * rc + stdout:
+    On fail:
+        * rc + stderr
+    % run_rc('uname')
+    (0, 'Linux\n')
+    % run_rc('ip link show dev eth99')
+    (1, 'Device "eth99" does not exist.\n')
+    """
+    command = command.split()
+    response = subprocess.run(command, stdout=stdout, stderr=stderr, encoding='utf-8')
+    rc = response.returncode
+    if rc == 0:
+        return rc, response.stdout
+    return rc, response.stderr
+
+
+def nft_add_table(name='flowspec'):
+    print(f'sudo nft add table ip {name}')
+    run_rc(f'sudo nft add table ip {name}')
+
+
+def nft_add_chain(chain_name, table_name, hook='prerouting', priority='-300'):
+    print(f'sudo nft add chain ip {table_name} {chain_name} '
+          f'{{ type filter hook {hook} priority {priority}; policy accept; }}')
+    run_rc(f"sudo nft add chain ip {table_name} {chain_name} "
+           f"{{ type filter hook prerouting priority -300; policy accept; }}")
+
+
+def nft_add_rule(table_name, chain_name, command=''):
+    print(f'DEBUG: sudo nft add rule ip {table_name} {chain_name} {command}')
+    run_rc(f'sudo nft add rule ip {table_name} {chain_name} {command}')
+
+
+def nft_del_rule(table_name, chain_name, command=''):
+    print(f'DEBUG: sudo nft delete rule ip {table_name} {chain_name} {command}')
+    run_rc(f'sudo nft delete rule ip {table_name} {chain_name} {command}')
+
+
 if data.get('neighbor').get('message').get('update'):
+    nft_add_table('flowspec')
+    nft_add_chain('drop_flow_routes', 'flowspec')
     for message, config in data['neighbor']['message']['update'].items():
         if message != 'announce' and message != 'withdraw':
             continue
@@ -136,8 +183,9 @@ if data.get('neighbor').get('message').get('update'):
             flow_path = config['ipv4 flow']
             action_nft = 'del_filter'
         for route in flow_path:
-            nft_cmd = 'sudo nft add rule ip flowspec drop_flow_routes' if action_nft == 'add_filter' else \
-                'sudo nft delete rule ip flowspec drop_flow_routes'
+            #nft_cmd = f'sudo nft add rule ip {table} {chain}' if action_nft == 'add_filter' else \
+            #    f'sudo nft delete rule ip {table} {chain}'
+            nft_cmd = ''
             flow_route = {}
             # Allow only drop for flowspec as we use it as PoC
             flow_route['action'] = ' drop'
@@ -153,7 +201,6 @@ if data.get('neighbor').get('message').get('update'):
                 destination_ip = route['destination-ipv4']
                 flow_route['destination_ip'] = destination_ip
                 nft_cmd += f' ip daddr {destination_ip[0]}'
-                nft_cmd += f' {proto[0]} daddr {destination_ip[0]}'
                 #print(f'DEST_IP: {destination_ip}')
             if route.get('port'):
                 port = route['port']
@@ -180,10 +227,10 @@ if data.get('neighbor').get('message').get('update'):
                 nft_cmd += f' ip length {packet_length[0]}'
                 #print(f'SRC_PORT: {source_port}')
             nft_cmd += flow_route.get('action')
-            print('\nFilter: ')
+            print('\nFlow-route dict: ')
             pprint(flow_route)
             pattern_del = '='
             nft_cmd = re.sub(fr'{pattern_del}', '', nft_cmd)
-            print(f'NFT_CMD: {nft_cmd}')
-
+            #print(f'NFT_CMD: {nft_cmd}')
+            nft_add_rule(table, chain, nft_cmd) if action_nft == 'add_filter' else nft_del_rule(table, chain, nft_cmd)
 
