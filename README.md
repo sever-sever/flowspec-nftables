@@ -1,8 +1,16 @@
 # PoC of parse exabgp JSON file and generate nftables firewall rules
 
+Generate rules:
+* source address
+* destination address
+* destination port
+* source port
+
+TODO parse other options
+
 ```
-sudo nft add table ip flowspec
-sudo nft add chain ip flowspec drop_flow_routes { type filter hook prerouting priority -300; policy accept; }
+DEBUG: sudo nft add table ip flowspec
+DEBUG: sudo nft add chain ip flowspec drop_flow_routes { type filter hook prerouting priority -300; policy accept; }
 
 Flow-route dict: 
 {'action': ' drop', 'action_nft': 'add_filter', 'source_ip': ['192.0.2.33/32']}

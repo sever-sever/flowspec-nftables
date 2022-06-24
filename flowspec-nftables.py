@@ -149,12 +149,12 @@ def run_rc(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE):
 
 
 def nft_add_table(name='flowspec'):
-    print(f'sudo nft add table ip {name}')
+    print(f'DEBUG: sudo nft add table ip {name}')
     run_rc(f'sudo nft add table ip {name}')
 
 
 def nft_add_chain(chain_name, table_name, hook='prerouting', priority='-300'):
-    print(f'sudo nft add chain ip {table_name} {chain_name} '
+    print(f'DEBUG: sudo nft add chain ip {table_name} {chain_name} '
           f'{{ type filter hook {hook} priority {priority}; policy accept; }}')
     run_rc(f"sudo nft add chain ip {table_name} {chain_name} "
            f"{{ type filter hook prerouting priority -300; policy accept; }}")
