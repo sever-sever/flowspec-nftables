@@ -128,6 +128,7 @@ data = announce
 table = 'flowspec'
 chain = 'drop_flow_routes'
 
+
 def run_rc(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE):
     """
     Run command, get return code
@@ -149,15 +150,15 @@ def run_rc(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE):
 
 
 def nft_add_table(name='flowspec'):
-    print(f'DEBUG: sudo nft add table ip {name}')
-    run_rc(f'sudo nft add table ip {name}')
+    print(f'DEBUG: sudo nft -- add table ip {name}')
+    run_rc(f'sudo nft -- add table ip {name}')
 
 
 def nft_add_chain(chain_name, table_name, hook='prerouting', priority='-300'):
-    print(f'DEBUG: sudo nft add chain ip {table_name} {chain_name} '
-          f'{{ type filter hook {hook} priority {priority}; policy accept; }}')
-    run_rc(f"sudo nft add chain ip {table_name} {chain_name} "
-           f"{{ type filter hook prerouting priority -300; policy accept; }}")
+    print(f"DEBUG: sudo nft -- add chain ip {table_name} {chain_name} "
+          f"'{{ type filter hook {hook} priority {priority}; policy accept; }}'")
+    run_rc(f"sudo nft -- add chain ip {table_name} {chain_name} "
+           f"'{{ type filter hook {hook} priority -300; policy accept; }}'")
 
 
 def nft_add_rule(table_name, chain_name, command=''):
@@ -170,7 +171,7 @@ def nft_del_rule(table_name, chain_name, command=''):
     run_rc(f'sudo nft delete rule ip {table_name} {chain_name} {command}')
 
 
-if data.get('neighbor').get('message').get('update'):
+if data.get('neighbor', {}).get('message', {}).get('update',{}):
     nft_add_table('flowspec')
     nft_add_chain('drop_flow_routes', 'flowspec')
     for message, config in data['neighbor']['message']['update'].items():
@@ -188,7 +189,7 @@ if data.get('neighbor').get('message').get('update'):
             nft_cmd = ''
             flow_route = {}
             # Allow only drop for flowspec as we use it as PoC
-            flow_route['action'] = ' drop'
+            flow_route['action'] = ' counter drop'
             flow_route['action_nft'] = action_nft
             #print(f'\nFlowRoute is: {route}')
             if route.get('protocol'):
