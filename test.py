@@ -19,12 +19,33 @@ import re
 import subprocess
 import sys
 
+from netmiko import ConnectHandler
 from sys import stdin
-from pprint import pprint
 
 
-table = 'flowspec'
-chain = 'drop_flow_routes'
+# Where execute nft commands (local|remote|both)
+exec_type = 'both'
+
+nft_chain = 'drop_flow_routes'
+nft_table = 'flowspec'
+
+# Remote connection to host where we add/remove nft rules
+if exec_type == 'remote' or exec_type == 'both':
+    remote_cmd = []
+    remote_host = '10.0.0.1'
+    vyos_router = {
+        'device_type': 'linux',
+        'host': remote_host,
+        'username': 'vyos',
+        'password': 'vyospass',
+        'port' : 22,
+        'use_keys': False,
+        'key_file': None,
+        'pkey': None,
+    }
+    net_connect = ConnectHandler(**vyos_router)
+
+debug = False
 
 
 def run_rc(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE):
@@ -76,10 +97,19 @@ while True:
     data = json.loads(line)
 
     if data.get('neighbor', {}).get('message', {}).get('update', {}):
-        print(f'############ DEBUG_JSON: data: {data}', file=sys.stderr)
+        print(f'### DEBUG : JSON: data: {data}', file=sys.stderr)
 
-        nft_add_table(table)
-        nft_add_chain('drop_flow_routes', table)
+        # Local command execution
+        if exec_type == 'local' or exec_type == 'both':
+            nft_add_table(nft_table)
+            nft_add_chain(nft_chain, nft_table)
+
+        # Commands for remote host
+        if exec_type == 'remote' or exec_type == 'both':
+            remote_cmd.append(f'sudo nft -- add table ip {nft_table}')
+            remote_cmd.append(f"sudo nft -- add chain ip {nft_table} {nft_chain} "
+                              f"'{{ type filter hook prerouting priority -300; policy accept; }}'")
+
         for message, config in data['neighbor']['message']['update'].items():
             if message != 'announce' and message != 'withdraw':
                 continue
@@ -128,8 +158,21 @@ while True:
                     flow_route['packet_length'] = packet_length
                     nft_cmd += f' ip length {packet_length[0]}'
                 nft_cmd += flow_route.get('action')
-                print('\nFlow-route dict: ')
-                pprint(flow_route)
                 pattern_del = '='
                 nft_cmd = re.sub(fr'{pattern_del}', '', nft_cmd)
-                nft_add_rule(table, chain, nft_cmd) if action_nft == 'add_filter' else nft_del_rule(table, chain, nft_cmd)
+
+                # Local nft commands
+                if exec_type == 'local' or exec_type == 'both':
+                    nft_add_rule(nft_table, nft_chain, nft_cmd) if action_nft == 'add_filter' else nft_del_rule(nft_table, nft_chain, nft_cmd)
+
+                # Send commands to remote host
+                if exec_type == 'remote' or exec_type == 'both':
+                    if action_nft == 'add_filter':
+                        remote_cmd.append(f'sudo nft add rule ip {nft_table} {nft_chain} {nft_cmd}')
+                    else:
+                        remote_cmd.append(f'sudo nft delete rule ip {nft_table} {nft_chain} {nft_cmd}')
+
+        if exec_type == 'remote' or exec_type == 'both':
+            #print(f'### DEBUG REMOTE_CMD: {remote_cmd}', file=sys.stderr)
+            output = net_connect.send_config_set(remote_cmd)
+            #print(output, file=sys.stderr)
