@@ -69,3 +69,63 @@ table ip flowspec {
 }
 
 ```
+## Integrate to VyOS
+Add container and bgp session between ExaBGP controller and VyOS
+
+Controller sends `nft` commands to remote host
+* Download 
+```
+sudo mkdir -p /config/container/exabgp/
+sudo mkdir -p /tmp/exabgp
+
+sudo wget -O /tmp/exabgp/Dockerfile https://raw.githubusercontent.com/sever-sever/flowspec-nftables/main/Dockerfile
+sudo wget -O /config/container/exabgp/exabgp-controller.conf https://raw.githubusercontent.com/sever-sever/flowspec-nftables/main/exabgp-controller.conf
+sudo wget -O /config/container/exabgp/test.py https://github.com/sever-sever/flowspec-nftables/blob/main/test.py
+sudo wget -O /config/container/exabgp/exabgp.env https://raw.githubusercontent.com/sever-sever/flowspec-nftables/main/exabgp.env
+
+```
+* Generate image (use only one command VyOS or native podman/docker)
+```
+generate container image exabgp-noautostart path /tmp/exabgp
+podman build -t exabgp-noautostart /tmp/exabgp
+
+```
+### VyOS configuration:
+```
+set container name exabgp-controller cap-add 'net-admin'
+set container name exabgp-controller image 'localhost/exabgp-noautostart'
+set container name exabgp-controller network NET01 address '10.0.0.254'
+set container name exabgp-controller volume config destination '/etc/exabgp/exabgp.conf'
+set container name exabgp-controller volume config source '/config/container/exabgp/exabgp-controller.conf'
+set container name exabgp-controller volume env destination '/etc/exabgp/exabgp.env'
+set container name exabgp-controller volume env source '/config/container/exabgp/exabgp.env'
+set container name exabgp-controller volume script destination '/etc/exabgp/test.py'
+set container name exabgp-controller volume script source '/config/container/exabgp/test.py'
+set container network NET01 prefix '10.0.0.0/24'
+set nat source rule 100 outbound-interface 'eth0'
+set nat source rule 100 source address '10.0.0.0/24'
+set nat source rule 100 translation address 'masquerade'
+set protocols bgp local-as '65001'
+set protocols bgp neighbor 10.0.0.254 address-family ipv4-flowspec route-reflector-client
+set protocols bgp neighbor 10.0.0.254 remote-as '65001'
+```
+* Connect to container and start exabgp in debug mode
+```
+connect container exabgp-controller
+bash
+exabgp -d /etc/exabgp/exabgp.conf
+
+```
+
+Receive flowspec route and check firewall rules:
+```
+vyos@r14:~$ sudo nft list table ip flowspec
+table ip flowspec {
+	chain drop_flow_routes {
+		type filter hook prerouting priority raw; policy accept;
+		ip daddr 192.0.2.33 ip saddr 203.0.113.1 counter packets 0 bytes 0 drop
+		ip daddr 192.0.2.5 counter packets 0 bytes 0 drop
+	}
+}
+vyos@r14:~$ 
+```
