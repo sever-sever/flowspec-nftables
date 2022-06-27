@@ -9,6 +9,13 @@ Generate rules:
 
 TODO parse other options
 
+Controller can work in modes `local`, `remote`, `both`
+In the `local` mode it generates commands in container or standalone host where you use Exabgp
+In the 'remote' it generates commands `nft` for remote host
+`both` generates `nft` rules/commands for local and for remote host
+
+Just set `exec_mode` in `test.py`
+
 ```
 DEBUG: sudo nft -- add table ip flowspec
 DEBUG: sudo nft -- add chain ip flowspec drop_flow_routes '{ type filter hook prerouting priority -300; policy accept; }'
@@ -109,6 +116,10 @@ set protocols bgp local-as '65001'
 set protocols bgp neighbor 10.0.0.254 address-family ipv4-flowspec route-reflector-client
 set protocols bgp neighbor 10.0.0.254 remote-as '65001'
 ```
+* Change `test.py` for ssh connections to VyOS
+`exec_type = 'remote'` or `exec_type = 'both'` for remote connection and execute remote `nft` commands
+
+`remote_host`, `username` and `password`
 * Connect to container and start exabgp in debug mode
 ```
 connect container exabgp-controller
