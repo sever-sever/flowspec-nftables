@@ -1,4 +1,5 @@
 # PoC of parse exabgp JSON input and generate nftables firewall rules
+**DON'T  USE IT IN PRODUCTION**
 
 Generate rules:
 * source address
@@ -7,11 +8,13 @@ Generate rules:
 * source port
 * proto
 
-TODO parse other options
+`TODO` parse other options, add delete rules
 
-Controller can work in modes `local`, `remote`, `both`
+Controller can work in `local`, `remote`, `both` modes
+
 In the `local` mode it generates commands in container or standalone host where you use Exabgp
-In the 'remote' it generates commands `nft` for remote host
+
+In the `remote` it generates commands `nft` for remote host
 `both` generates `nft` rules/commands for local and for remote host
 
 Just set `exec_mode` in `test.py`
@@ -37,13 +40,15 @@ Flow-route dict:
 DEBUG: sudo nft add rule ip flowspec drop_flow_routes  ip daddr 192.0.2.5/32 tcp dport 3128 tcp sport 8888 counter drop
 ```
 
-Podman:
+Podman/Docker:
 ```
-podman run --detach --privileged --interactive --tty --replace  \
-  --restart on-failure --name exabgp-controller \
-  -v /etc/exabgp/exabgp-controller.conf:/etc/exabgp/exabgp.conf \
-  -v /config/container/exabgp/test.py:/etc/exabgp/test.py  --net NET01 --ip 10.0.0.254 \
-  localhost/exabgp-noautostart
+podman run --detach --interactive --tty --replace  \
+    --cap-add=NET_ADMIN --memory 512m --memory-swap 0 \
+    --restart on-failure --name exabgp-controller \
+    -v /config/container/exabgp/exabgp-controller.conf:/etc/exabgp/exabgp.conf \
+    -v /config/container/exabgp/exabgp.env:/etc/exabgp/exabgp.env \
+    -v /config/container/exabgp/test.py:/etc/exabgp/test.py \
+    --net NET01 --ip 10.0.0.254 localhost/exabgp-noautostart
 
 ```
 In container (user root for nft):
@@ -76,7 +81,7 @@ table ip flowspec {
 }
 
 ```
-## Integrate to VyOS
+## Integrate to VyOS 1.4
 Add container and bgp session between ExaBGP controller and VyOS
 
 Controller sends `nft` commands to remote host
@@ -130,6 +135,22 @@ exabgp -d /etc/exabgp/exabgp.conf
 
 Receive flowspec route and check firewall rules:
 ```
+vyos@r14:~$ show bgp ipv4 flowspec detail 
+BGP flowspec entry: (flags 0x418)
+        Destination Address 192.0.2.33/32
+        Source Address 203.0.113.1/32
+        FS:rate 0.000000
+        received for 00:05:20
+        not installed in PBR
+BGP flowspec entry: (flags 0x418)
+        Destination Address 192.0.2.5/32
+        FS:rate 0.000000
+        received for 00:05:20
+        not installed in PBR
+
+Displayed  2 flowspec entries
+
+
 vyos@r14:~$ sudo nft list table ip flowspec
 table ip flowspec {
 	chain drop_flow_routes {
